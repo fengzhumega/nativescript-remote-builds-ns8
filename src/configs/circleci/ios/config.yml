@@ -1,0 +1,71 @@
+version: 2
+jobs:
+  build:
+    macos:
+      # xcode: 11.3.0
+      xcode: 12.4.0
+    working_directory: "~/{{PROJECT_NAME}}"
+    environment:
+      FL_OUTPUT_DIR: ~/fl_output
+    shell: /bin/bash --login -o pipefail
+    steps:
+      # load all SSH keys from the CircleCI project settings
+      # in order to be able to pull the ios signing repository
+      - add_ssh_keys:
+      # setup NPM
+      - run: echo 'export PATH=~/npm_prefix/bin:$PATH' >> $BASH_ENV
+      - run: npm config set prefix ~/npm_prefix
+      - run: mkdir -p ~/npm_prefix
+      - run: mkdir -p ~/npm_prefix/lib
+      - run: brew install coreutils
+
+      # setup global modules - TNS
+      - restore_cache:
+          keys:
+            - global-modules-mac-{{CLI_VERSION}}
+      - run: tns --version || npm i -g nativescript@{{CLI_VERSION}}
+      - save_cache:
+          paths:
+            - ~/npm_prefix
+          key: global-modules-mac-{{CLI_VERSION}}
+      - run: tns usage-reporting disable
+      - run: tns error-reporting disable
+
+      - checkout
+
+      # downgrade nodejs
+      - run: sudo npm install -g n
+      - run: sudo ~/npm_prefix/bin/n 10.14.1
+      
+      # NODE PACKAGES
+      # - run: npm cache verify
+      # run npm install 5 times max (this is due to circleci ramdomly fails over busy period)
+      - run: x=1;while [ $x -le 5 ] ; do echo "Trying to npm install ($x)... This cmd will timeout in 5 minutes.";  gtimeout 300 npm install && break; x=$(( $x + 1 )); done
+      # rebuild the node-sass for macos
+      - run: npm rebuild node-sass
+
+      # INSTALL GEMS
+      - restore_cache:
+          key: gems-mac-{{ checksum "Gemfile" }}
+      - run: bundle config set path 'vendor/bundle'
+      - run: bundle install
+      - save_cache:
+          key: gems-mac-{{ checksum "Gemfile" }}
+          paths:
+            - vendor/bundle
+      - run: pod repo update
+      - run:
+          name: Fastlane
+          command: bundle exec fastlane ios build
+      - store_artifacts:
+          path: ~/fl_output/{{PROJECT_NAME}}.ipa
+          destination: "~/output/{{OUTPUT_APP_FILENAME}}"
+      - store_artifacts:
+          path: ~/fl_output/{{PROJECT_NAME}}.app.zip
+          destination: "~/output/{{OUTPUT_APP_FILENAME}}.zip"
+
+workflows:
+  version: 2
+  workflow:
+    jobs:
+      - build
