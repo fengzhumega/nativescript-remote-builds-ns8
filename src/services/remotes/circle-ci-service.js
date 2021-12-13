@@ -110,14 +110,33 @@ class CircleCIService {
                 url: `https://circleci.com/api/v1.1/project/github/${this.gitRepositoryName}/envvar?circle-token=${this.circleCiApiAccessToken}`,
                 method: "GET"
             });
-            hasError = response.response.statusCode !== 200;
-            if (!hasError) {
-                const envVars = JSON.parse(response.body).reduce(function (result, item) {
-                    result[item.name] = item.value;
-                    return result;
-                }, {});
 
-                return envVars;
+            
+            hasError = !(response.response.statusCode === 200 || (response.response.response && response.response.response.status == 200));
+            
+            if (!hasError) {
+                
+                var data = response.body ? response.body : response.response.body;
+                
+                // this is fix the issue with invalid json format received
+                if (data && typeof data === 'string'){
+                    data = data.replace("'", '"');
+                }
+
+                // parse and convert the environment variables
+                const envVars = {};
+
+                JSON.parse(data).forEach((item) => {
+                    envVars[item.name] = item.value;
+                });
+
+                // this code has some issue with latest libraries
+                // const envVars = JSON.parse(data).reduce(function (result, item) {
+                //     result[item.name] = item.value;
+                //     return result;
+                // }, {});
+
+                return envVars;                
             }
         } catch (e) {
             hasError = true;
@@ -140,7 +159,7 @@ class CircleCIService {
                     'Content-Type': 'application/json;charset=UTF-8'
                 }
             });
-            hasError = response.response.statusCode !== 201;
+            hasError = !(response.response.statusCode === 201 || response.response.response && response.response.response.status);
             if (!hasError && this.$cleanupService.addRequest) {
                 this.$cleanupService.addRequest({
                     url: `https://circleci.com/api/v1.1/project/github/${this.gitRepositoryName}/envvar/${envName}?circle-token=${this.circleCiApiAccessToken}`,
@@ -164,7 +183,7 @@ class CircleCIService {
                 url: `https://circleci.com/api/v1.1/project/github/${this.gitRepositoryName}/envvar/${envName}?circle-token=${this.circleCiApiAccessToken}`,
                 method: "DELETE"
             });
-            hasError = response.response.statusCode !== 200;
+            hasError = !(response.response.statusCode === 200 || response.response.response && response.response.response.status === 200);
             if (!hasError && this.$cleanupService.removeRequest) {
                 this.$cleanupService.removeRequest({
                     url: `https://circleci.com/api/v1.1/project/github/${this.gitRepositoryName}/envvar/${envName}?circle-token=${this.circleCiApiAccessToken}`,
@@ -191,7 +210,8 @@ class CircleCIService {
                 method: "POST"
             });
 
-            this._hasValidIntegration = followRepoResponse.response.statusCode === 200;
+            // NS 7 => NS 8 upgrade
+            this._hasValidIntegration = followRepoResponse.response.statusCode === 200 || (followRepoResponse.response && followRepoResponse.response.response && followRepoResponse.response.response.status === 200);
         } catch (e) {
             this._hasValidIntegration = false;
         }
