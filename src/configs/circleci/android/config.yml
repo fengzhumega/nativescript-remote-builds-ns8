@@ -19,7 +19,8 @@ jobs:
       # - restore_cache:
       #     keys:
       #       - global-modules-linux-{{CLI_VERSION}}
-      - run: tns --version || npm i -g nativescript@{{CLI_VERSION}}
+      - run: npm i -g nativescript@8.1.5
+      - run: npm i -g npm@6.14.15
       - save_cache:
           paths:
             - ~/npm_prefix
@@ -28,6 +29,10 @@ jobs:
       - run: tns error-reporting disable
 
       - checkout
+
+      # downgrade nodejs
+      - run: sudo npm install -g n
+      - run: sudo /usr/local/bin/n 12.22.7
 
       # NODE PACKAGES
       - run: npm install
