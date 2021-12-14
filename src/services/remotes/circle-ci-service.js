@@ -1,4 +1,5 @@
 const path = require("path");
+const request = require('request');
 const _ = require("lodash");
 const { sleep } = require("../../utils");
 const { FastlaneService } = require("../common/fastlane-service");
@@ -92,10 +93,18 @@ class CircleCIService {
         this.$fs.createDirectory(destinationDir);
         var targetFile = this.$fs.createWriteStream(destinationFilePath);
 
-        await this.$httpClient.httpRequest({
-            url: appArtifact.url + `?circle-token=${this.circleCiApiAccessToken}`,
-            pipeTo: targetFile
-        });
+        // await this.$httpClient.httpRequest({
+        //     url: appArtifact.url + `?circle-token=${this.circleCiApiAccessToken}`,
+        //     pipeTo: targetFile
+        // });
+
+        const remoteFile = await request(appArtifact.url + `?circle-token=${this.circleCiApiAccessToken}`);
+
+        await new Promise((resolve, reject) => {
+            remoteFile.pipe(targetFile);
+            targetFile.on("close", resolve);
+            targetFile.on("error", console.error);
+        })
 
         if (isZip) {
             await this.$fs.unzip(destinationFilePath, destinationDir);
